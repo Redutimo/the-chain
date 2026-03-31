@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Chain — Meridian Pharma SCM Simulation</title>
+  
+  <!-- Fonts: Outfit (Premium Modern) & IBM Plex Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: {
+            'xs': '480px',
+          },
+          colors: {
+            // Accessible Light Theme - Professional & Clinical
+            primary: {
+              DEFAULT: '#007d79', // Darker Teal for white contrast
+              light: '#009d9a',
+              dark: '#005d5d',
+            },
+            ui: {
+              bg: '#f4f4f4',      // Soft background
+              surface: '#ffffff', // Card surface
+              s2: '#e0e0e0',      // Dividers
+              s3: '#cfcfcf',      // Hover states
+              border: '#dde1e6',  // Standard border
+            },
+            text: {
+              main: '#161616',      // Serious charcoal
+              secondary: '#525252',  // Subtext
+              muted: '#6f6f6f',      // Labels
+            },
+            accent: {
+              blue: '#00539a',
+              red: '#da1e28',
+              redLight: '#fa4d56',
+              yellow: '#8d6e00',    // Darker yellow for accessibility
+              yellowLight: '#f1c21b',
+              green: '#198038',
+              greenLight: '#24a148',
+            }
+          },
+          fontFamily: {
+            mono: ['"IBM Plex Mono"', 'monospace'],
+            sans: ['"Outfit"', 'sans-serif'],
+          },
+          animation: {
+            'fade-up': 'fadeUp 0.5s ease-out forwards',
+            'fade-in': 'fadeIn 0.45s ease-out forwards',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    :root {
+      --primary: #007d79;
+      --primary-light: #009d9a;
+      --primary-dark: #005d5d;
+      --ui-bg: #f4f4f4;
+      --ui-surface: #ffffff;
+      --border: #dde1e6;
+      --text-main: #161616;
+      --text-secondary: #525252;
+      --text-muted: #6f6f6f;
+      --focus-ring: 0 0 0 3px rgba(0, 125, 121, 0.4);
+    }
+    
+    body {
+      background-color: var(--ui-bg);
+      color: var(--text-main);
+      font-family: 'Outfit', sans-serif;
+      margin: 0;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Fluid Typography */
+    h1 { font-size: clamp(2.5rem, 8vw, 6rem); }
+    h2 { font-size: clamp(1.5rem, 5vw, 3.5rem); }
+    p.lead { font-size: clamp(1.125rem, 2vw, 1.5rem); }
+    
+    /* Accessibility: Clear Focus States */
+    button:focus-visible, a:focus-visible {
+      outline: none;
+      box-shadow: var(--focus-ring);
+    }
+
+    /* SVG Flow Animations */
+    @keyframes flow-forward {
+      from { stroke-dashoffset: 24; }
+      to { stroke-dashoffset: 0; }
+    }
+    @keyframes flow-backward {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: 24; }
+    }
+    .animate-flow-forward {
+      stroke-dasharray: 12 6;
+      animation: flow-forward 1s linear infinite;
+    }
+    .animate-flow-backward {
+      stroke-dasharray: 12 6;
+      animation: flow-backward 1s linear infinite;
+    }
+
+    /* Professional scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--ui-bg); }
+    ::-webkit-scrollbar-thumb { 
+      background: #c1c7cd; 
+      border-radius: 10px; 
+    }
+    ::-webkit-scrollbar-thumb:hover { background: #8d9399; }
+
+    /* Transitions */
+    .fade-enter { opacity: 0; transform: translateY(10px); }
+    .fade-enter-active { opacity: 1; transform: translateY(0); transition: all 400ms ease-out; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React Dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+  <script>
+    const { useState, useEffect, createElement: h, Fragment } = React;
+
+    // ═══════════════════════════════════════════════════
+    //  NARRATIVE
+    // ═══════════════════════════════════════════════════
+    const NARRATIVE = [
+      { h: 'A medicine reaches a patient. Nothing about that is simple.',
+        p: 'The tablet in a patient\'s hand has crossed 12 countries, 40 companies, and 6 months of lead time. The global pharmaceutical supply chain is humanity\'s most critical logistics infrastructure — and one of the most fragile. A single contamination event in one factory can leave hospitals on five continents short of a medicine they cannot substitute.',
+        hl: null, concept: null },
+      { h: 'Upstream: the geopolitics of raw materials',
+        p: 'Roughly 80% of active pharmaceutical ingredients (APIs) consumed in Western markets originate in India and China. This concentration creates structural exposure. When a regulatory hold is placed on a single solvent plant in Gujarat, the disruption moves invisibly through the chain, surfacing weeks later as a ward-level shortage.',
+        hl: 0, concept: '→ Material flow originates here. Every downstream node depends on this point.' },
+      { h: 'Manufacture: validated, slow, and irreplaceable',
+        p: 'Pharmaceutical manufacturing is not like other industries. Every process must be regulatory-validated. Lead times of 6–18 months are normal for complex drug substances. This rigidity — engineered for quality assurance — is also what makes pharmaceutical supply chains profoundly brittle.',
+        hl: 1, concept: '→ Long lead times mean shortages are slow to form and slow to resolve.' },
+      { h: 'Quality and compliance: a non-negotiable condition',
+        p: 'Before a medicine crosses any border, it must satisfy the regulatory standards of every market it enters. A manufacturing deviation in Brindisi can trigger a market withdrawal under rules written in Brussels. Compliance is not a gate at the end; it is a condition running through every step.',
+        hl: 2, concept: '↔ Information flow: quality data and regulatory signals move in both directions.' },
+      { h: 'Distribution: the last kilometre',
+        p: 'From manufacturing site to patient bedside, products move through wholesalers, 3PL providers, and cold chain operators. Temperature excursions during transit can render an entire shipment of biologics unusable. Allocation disputes create shortages that policy alone cannot resolve.',
+        hl: 3, concept: '← Financial flow: payments and contractual obligations travel upstream.' },
+      { h: 'Three flows. One discipline.',
+        p: 'Material flow. Information flow. Financial flow. Supply chain management is the discipline of keeping them aligned — under geopolitical pressure, regulatory scrutiny, and the reality that a patient\'s clinical outcome depends on your next decision.',
+        hl: 'all', concept: null },
+    ];
+
+    // ═══════════════════════════════════════════════════
+    //  ROUNDS AND ARCHETYPES (Logic source remains unchanged)
+    // ═══════════════════════════════════════════════════
+    // [Keeping the ROUNDS logic to preserve game mechanics exactly as is]
+    const ROUNDS = [
+      { week: 1, tag: 'API SUPPLIER FAILURE', 
+        situation: 'Your primary API supplier in Gujarat has suspended production following a solvent contamination event. Your warehouse stock represents 17 days of demand. Three NHS hospital trusts have standing orders due in 11 days.',
+        stakes: 'If supply is not secured within two weeks, hospitals will face critical shortages of a first-line antibiotic.',
+        choices: [
+          { id: '1', label: 'Emergency Secondary Source', description: 'Expedite Hyderabad supplier onboarding.', tradeoff: 'Quality risk and cost premium.', tag: 'RESILIENCE', consequence: 'Hyderabad delivers. Hospitals receive their orders.', deltas: { inventory: 12, resilience: 14, demand: -8, reputation: 12 }, concept: { term: 'Dual Sourcing', note: 'Distribution of risk across multiple geography-distinct suppliers.' } },
+          { id: '2', label: 'Patient Triage Protocol', description: 'Work with hospitals to prioritise by acuity.', tradeoff: 'High administrative burden.', tag: 'PATIENT_FIRST', consequence: 'Allocation holds. No patient goes untreated.', deltas: { inventory: 4, resilience: 8, demand: 6, reputation: -8 }, concept: { term: 'Safety Stock', note: 'Buffers protect against variability but carry holding costs.' } },
+          { id: '3', label: 'Spot-Market Procurement', description: 'Purchase from a broker in Singapore.', tradeoff: 'Provenance and chain-of-custody risks.', tag: 'COST_DRIVEN', consequence: 'Supply arrives, but a later audit flags provenance gaps.', deltas: { inventory: 18, resilience: -10, demand: -6, reputation: -14 }, concept: { term: 'Provenance Risk', note: 'Spot markets bypass relationship-based quality assurance.' } }
+        ]
+      },
+      { week: 2, tag: 'DEMAND SURGE', situation: 'A regional outbreak causes demand for your antibiotics to rise to 280%. Wholesalers are panic-ordering to build buffers, distorting your data signals.', stakes: 'Failure risks clinical harm and being seen to prioritise profit over patient need.', 
+        choices: [
+          { id: '1', label: 'Outbreak Allocation', description: 'Freeze commercial orders; 100% to NHS settings.', tradeoff: 'Significant revenue loss.', tag: 'PATIENT_FIRST', consequence: 'Your response is cited as a national best practice.', deltas: { inventory: -12, resilience: 6, demand: -14, reputation: 20 }, concept: { term: 'Service-Level Priority', note: 'Critical supply must supersede commercial fulfilment.' } },
+          { id: '2', label: 'Emergency Production', description: 'Commission emergency uplift with expediting fees.', tradeoff: 'High cost and 8-day lag.', tag: 'EFFICIENCY', consequence: 'Production arrives. Allocation is defensible.', deltas: { inventory: 8, resilience: 4, demand: -4, reputation: 2 }, concept: { term: 'Bullwhip Effect', note: 'Small demand spikes amplify as they move upstream.' } },
+          { id: '3', label: 'First-Come First-Served', description: 'Fulfil orders in sequence received.', tradeoff: 'Private hubs may get stock over NHS ICUs.', tag: 'COST_DRIVEN', consequence: 'Public outcry follows prioritised private supply.', deltas: { inventory: -20, resilience: -8, demand: 18, reputation: -28 }, concept: { term: 'Strategic Alignment', note: 'SCM must align with societal and ethical mandates.' } }
+        ]
+      },
+      { week: 3, tag: 'REGULATORY DEVIATION', situation: 'Process deviations were flagged in granulation runs over 6 weeks. 14 batches reached distribution across four countries.', stakes: 'Compromised product reaching patients could have existential legal consequences.', 
+        choices: [
+          { id: '1', label: 'Voluntary Full Recall', description: 'Immediate recall of all 14 batch runs.', tradeoff: '£3.2m write-off.', tag: 'RESILIENCE', consequence: 'Painful but your quality record is preserved.', deltas: { inventory: -24, resilience: 16, demand: 8, reputation: 14 }, concept: { term: 'Quality Assurance', note: 'QA is a supply chain responsibility, not just manufacturing.' } },
+          { id: '2', label: 'Quarantine & Investigate', description: 'Immediate quarantine pending investigation.', tradeoff: 'Days of uncertainty.', tag: 'EFFICIENCY', consequence: 'Disruption is targeted to specific batches.', deltas: { inventory: -10, resilience: 10, demand: 6, reputation: 8 }, concept: { term: 'Traceability', note: 'Information flow allows surgical risk management.' } },
+          { id: '3', label: 'Distribution + Lab Test', description: 'Continue distribution while re-testing stock.', tradeoff: 'Uncertain product reaches patients.', tag: 'COST_DRIVEN', consequence: 'Batches fail testing post-dispensing. Mandatory recall.', deltas: { inventory: 2, resilience: -22, demand: 6, reputation: -26 }, concept: { term: 'Precautionary Principle', note: 'The cost of inaction is often higher than proactive cost.' } }
+        ]
+      },
+      { week: 4, tag: 'COLD CHAIN FAILURE', situation: 'HVAC failure at a primary hub. £1.8m in biologics exposed to 8°C+ for 11 hours. Sensitivity to temp is critically high.', stakes: 'Treatment interruptions for oncology are dangerous; biologics are fragile.', 
+        choices: [
+          { id: '1', label: 'Full Quarantine', description: 'Arrange bridging supply from EU imports.', tradeoff: 'Complex, costly logistics.', tag: 'PATIENT_FIRST', consequence: 'Emergency logistics preserve patient safety.', deltas: { inventory: -14, resilience: 12, demand: 2, reputation: 16 }, concept: { term: 'Cold Chain Integrity', note: 'Temperature integrity is a clinical safety function.' } },
+          { id: '2', label: 'Data-Led Quarantine', description: 'Quarantine assets flagged by loggers.', tradeoff: 'Assumes biological stability.', tag: 'EFFICIENCY', consequence: 'Study finds issues in marginal batches later.', deltas: { inventory: -4, resilience: 2, demand: 0, reputation: -6 }, concept: { term: 'Risk Quantification', note: 'Probabilistic assessments fail if variability is high.' } },
+          { id: '3', label: 'Release + Monitoring', description: 'Release stock but monitor adverse events.', tradeoff: 'Monitoring is reactive and high-risk.', tag: 'COST_DRIVEN', consequence: 'Adverse events reported. Entire portfolio suspended.', deltas: { inventory: 8, resilience: -18, demand: 4, reputation: -22 }, concept: { term: 'Proactive Controls', note: 'Reactive monitoring documents harm; controls prevent it.' } }
+        ]
+      },
+      { week: 5, tag: 'ALLOCATION CRISIS', situation: 'Global API shortage. 35% normal inventory. Four segments competing: NHS Oncology, Private, Community, and Export Contract (£2.4m).', stakes: 'Every decision leads to some shortfall; clinical safety vs. commercial contracts.',
+        choices: [
+          { id: '1', label: 'Clinical Acuity Framework', description: 'Prioritise NHS Oncology > Community > Private.', tradeoff: 'Export contract breach penalties.', tag: 'PATIENT_FIRST', consequence: 'Meridian is named a national ethical leader.', deltas: { inventory: -8, resilience: 8, demand: -6, reputation: 16 }, concept: { term: 'Equity in SCM', note: 'SCM requires explicit prioritisation of human value.' } },
+          { id: '2', label: 'Pro-rata Allocation', description: 'Distribute proportionally to all segments.', tradeoff: 'No customer is fully satisfied.', tag: 'EFFICIENCY', consequence: 'Pragmatic but leaves critical needs unmet.', deltas: { inventory: -6, resilience: 4, demand: -2, reputation: -10 }, concept: { term: 'Equivalence', note: 'Treating commercial and life-critical needs as equal is a choice.' } },
+          { id: '3', label: 'Protect Export Contract', description: 'Fulfil legal obligations first.', tradeoff: 'NHS Oncology centers left undersupplied.', tag: 'COST_DRIVEN', consequence: 'Major scandal: "Exports prioritised over NHS."', deltas: { inventory: 2, resilience: -12, demand: 10, reputation: -24 }, concept: { term: 'Financial Sustainability', note: 'Honouring financial flows often compromises material needs.' } }
+        ]
+      }
+    ];
+
+    const ARCHETYPES = {
+      PATIENT_FIRST: { archetype: 'The Patient Advocate', summary: 'You treated patient safety and clinical continuity as non-negotiable, even at significant commercial cost. Your leadership reflects the core ethical purpose of pharmaceutical SCM.', strengths: ['Ethical consistency', 'Ethical leadership', 'Long-term reputational building'], blindspots: ['Financial sustainability', 'Contractual risk management'], reflection: 'How can you bake patient-first principles into standard operating procedures so they don\'t require a "sacrifice" each time?' },
+      RESILIENCE: { archetype: 'The Systems Thinker', summary: 'You focused on structural integrity and redundancy. You understood that individual crises are symptoms of systemic vulnerability.', strengths: ['Structural risk assessment', 'Motive for redundancy', 'Long-term stability'], blindspots: ['Cost intensity', 'Operational speed during acute crisis'], reflection: 'Which resilience investments should have been made years ago to prevent these crises from occurring today?' },
+      COST_DRIVEN: { archetype: 'The Cost Controller', summary: 'You prioritised financial efficiency and contract protection. This often deferred costs that later compounded into regulatory and reputational crises.', strengths: ['Financial awareness', 'Contractual obligation focus'], blindspots: ['Total Cost of Ownership', 'Regulatory risk compounding'], reflection: 'How can you better quantify the "hidden costs" of regulatory failure and reputation loss in your initial decision matrix?' },
+      EFFICIENCY: { archetype: 'The Pragmatist', summary: 'You balanced competing pressures, seeking workable middle-ground solutions. While avoidings extremes, you occasionally left clinical or strategic value on the table.', strengths: ['Practicality', 'Reduced operational volatility'], blindspots: ['Asymmetric risk assessment', 'Lack of explicit prioritisation'], reflection: 'Is a balanced approach always the safest, or do some supply chain scenarios demand an asymmetric, radical response?' }
+    };
+
+    const MLABELS = { inventory: 'Inventory', resilience: 'Resilience', demand: 'Pressure', reputation: 'Reputation' };
+    const INITIAL = { inventory: 72, resilience: 68, demand: 52, reputation: 80 };
+    const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
+
+    // ═══════════════════════════════════════════════════
+    //  RADAR CHART
+    // ═══════════════════════════════════════════════════
+    function RadarChart({ counts }) {
+      const total = 5;
+      const cx = 185, cy = 155, r = 100;
+      const axes = [
+        { key: 'PATIENT_FIRST', lbl: 'Patient First', ax: 0, ay: -1 },
+        { key: 'RESILIENCE', lbl: 'Resilience', ax: 1, ay: 0 },
+        { key: 'EFFICIENCY', lbl: 'Efficiency', ax: 0, ay: 1 },
+        { key: 'COST_DRIVEN', lbl: 'Cost Driven', ax: -1, ay: 0 },
+      ];
+      const score = key => Math.max(0.1, (counts[key] || 0) / total);
+      const dataPts = axes.map(a => {
+        const s = score(a.key) * r;
+        return `${cx + (a.ax * s)},${cy + (a.ay * s)}`;
+      }).join(' ');
+
+      return h('svg', { viewBox: '0 0 370 310', className: 'w-full' },
+        [0.25, 0.5, 0.75, 1].map(p => h('polygon', {
+          key: p,
+          points: `${cx},${cy - (r * p)} ${cx + (r * p)},${cy} ${cx},${cy + (r * p)} ${cx - (r * p)},${cy}`,
+          fill: 'none', stroke: '#dde1e6',
+          strokeWidth: p === 1 ? 1.5 : 0.8,
+          strokeDasharray: p === 1 ? 'none' : '3 3'
+        })),
+        axes.map((a, i) => h('line', { key: i, x1: cx, y1: cy, x2: cx + (a.ax * r), y2: cy + (a.ay * r), stroke: '#dde1e6', strokeWidth: 1 })),
+        h('polygon', { points: dataPts, fill: 'rgba(0,125,121,0.15)', stroke: '#007d79', strokeWidth: 2.5 }),
+        axes.map((a, i) => {
+          const s = r + 38;
+          const score = counts[a.key] || 0;
+          const isActive = score > 0;
+          return h('g', { key: i },
+            h('text', { x: cx + (a.ax * s), y: cy + (a.ay * s) - 6, textAnchor: 'middle',
+              fontSize: 11, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace',
+              fill: isActive ? '#007d79' : '#6f6f6f', textTransform: 'uppercase' }, a.lbl),
+            h('text', { x: cx + (a.ax * s), y: cy + (a.ay * s) + 9, textAnchor: 'middle',
+              fontSize: 10, fontFamily: 'IBM Plex Mono, monospace',
+              fill: isActive ? '#007d79' : '#6f6f6f' }, `${score}/5`)
+          );
+        })
+      );
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  DIAGRAMS (Integrated visual updates)
+    // ═══════════════════════════════════════════════════
+    
+    // Chain Overview Visualization — rebuilt from scratch
+    function ChainSVG({ hl }) {
+      const nodes = [
+        { lbl: 'Suppliers', e: '🏭' },
+        { lbl: 'Mfg', e: '⚗️' },
+        { lbl: 'QC', e: '🔬' },
+        { lbl: 'Logistics', e: '🚚' },
+        { lbl: 'Patient', e: '🏥' },
+      ];
+
+      // Shared sub-card style for the 2-col callout grids
+      const subCard = (t, d) => h('div', { className: 'bg-ui-bg rounded-xl p-4 flex flex-col justify-between' },
+        h('p', { className: 'text-sm font-black text-text-main' }, t),
+        h('p', { className: 'text-sm text-text-muted mt-1 leading-snug' }, d)
+      );
+
+      const detail = {
+        null: h('div', { className: 'h-full flex flex-col gap-3' },
+          h('div', { className: 'grid grid-cols-3 gap-3 flex-shrink-0' },
+            [['12', 'countries'], ['40', 'companies'], ['6 mo', 'lead time']].map(([n, l]) =>
+              h('div', { key: l, className: 'bg-ui-bg rounded-xl p-4 text-center' },
+                h('p', { className: 'text-3xl font-black text-primary' }, n),
+                h('p', { className: 'text-sm font-bold text-text-muted mt-1' }, l)
+              )
+            )
+          ),
+          h('p', { className: 'text-sm text-text-muted font-medium leading-relaxed flex-1 flex items-center' },
+            'Every tablet crosses this entire chain before it reaches a patient. A failure at any point propagates to every point downstream.'
+          )
+        ),
+        0: h('div', { className: 'h-full flex flex-col gap-3' },
+          h('div', { className: 'bg-accent-red/5 border border-accent-red/20 rounded-xl p-4 text-center flex-shrink-0' },
+            h('p', { className: 'text-6xl font-black text-accent-red leading-none' }, '80%'),
+            h('p', { className: 'text-sm font-bold text-text-muted mt-1.5' }, 'of Western APIs sourced from India & China')
+          ),
+          h('div', { className: 'grid grid-cols-2 gap-3 flex-1' },
+            [['Single plant', 'One regulatory hold disrupts global supply'], ['Invisible lag', 'Weeks pass before wards feel the impact']].map(([t, d]) => subCard(t, d))
+          )
+        ),
+        1: h('div', { className: 'h-full flex flex-col gap-3' },
+          h('div', { className: 'bg-accent-yellow/5 border border-accent-yellow/20 rounded-xl p-4 text-center flex-shrink-0' },
+            h('p', { className: 'text-6xl font-black text-accent-yellow leading-none' }, '6–18'),
+            h('p', { className: 'text-sm font-bold text-text-muted mt-1.5' }, 'months — standard lead time for complex drug substances')
+          ),
+          h('div', { className: 'grid grid-cols-2 gap-3 flex-1' },
+            [['Validated process', 'Every step approved before a single batch ships'], ['No shortcuts', 'Changing one parameter can require months of requalification']].map(([t, d]) => subCard(t, d))
+          )
+        ),
+        2: h('div', { className: 'h-full flex flex-col gap-3' },
+          h('div', { className: 'flex gap-2 flex-wrap flex-shrink-0' },
+            ['EMA', 'FDA', 'MHRA', 'TGA', 'PMDA'].map(r =>
+              h('span', { key: r, className: 'px-4 py-2 bg-white border-2 border-accent-blue/25 rounded-lg text-sm font-black text-accent-blue' }, r)
+            )
+          ),
+          h('p', { className: 'text-sm text-text-muted font-medium leading-relaxed' },
+            'All must be satisfied simultaneously. A deviation in one country can trigger withdrawal across every market where the product is authorised.'
+          ),
+          h('div', { className: 'bg-ui-bg rounded-xl p-4 flex items-start gap-3 flex-1' },
+            h('span', { className: 'text-xl flex-shrink-0' }, '↔'),
+            h('p', { className: 'text-sm text-text-muted leading-snug' },
+              'Quality data, deviation reports, and inspection findings flow in both directions — between manufacturer and every national authority.'
+            )
+          )
+        ),
+        3: h('div', { className: 'h-full flex flex-col gap-3' },
+          h('div', { className: 'bg-primary/5 border border-primary/20 rounded-xl p-4 text-center flex-shrink-0' },
+            h('p', { className: 'text-5xl font-black text-primary leading-none' }, '2°C – 8°C'),
+            h('p', { className: 'text-sm font-bold text-text-muted mt-1.5' }, 'GDP cold chain requirement — zero tolerance for excursion')
+          ),
+          h('div', { className: 'grid grid-cols-2 gap-3 flex-1' },
+            [['Handoff chain', '3PL · cold chain operators · hospital pharmacies'], ['One breach', 'An entire biologics shipment can be written off on delivery']].map(([t, d]) => subCard(t, d))
+          )
+        ),
+        all: h('div', { className: 'h-full flex flex-col gap-2' },
+          [
+            { dir: '→', lbl: 'Material Flow', note: 'Raw materials → APIs → finished product → patient. Unidirectional. Irreversible.', color: '#007d79', bg: 'rgba(0,125,121,0.07)', bd: 'rgba(0,125,121,0.25)' },
+            { dir: '↔', lbl: 'Information Flow', note: 'Quality data, forecasts, regulatory signals — moving in both directions simultaneously.', color: '#00539a', bg: 'rgba(0,83,154,0.06)', bd: 'rgba(0,83,154,0.2)' },
+            { dir: '←', lbl: 'Financial Flow', note: 'Payments, credit terms, contractual obligations — travelling upstream as goods move down.', color: '#8d6e00', bg: 'rgba(141,110,0,0.06)', bd: 'rgba(141,110,0,0.2)' },
+          ].map(f =>
+            h('div', { key: f.lbl, className: 'flex-1 rounded-xl border px-4 flex items-center gap-4', style: { background: f.bg, borderColor: f.bd } },
+              h('div', { className: 'w-9 h-9 flex-shrink-0 rounded-lg flex items-center justify-center text-lg font-black border-2 bg-white', style: { color: f.color, borderColor: f.bd } }, f.dir),
+              h('div', null,
+                h('p', { className: 'text-xs font-black uppercase tracking-widest', style: { color: f.color } }, f.lbl),
+                h('p', { className: 'text-sm text-text-secondary font-medium leading-snug mt-0.5' }, f.note)
+              )
+            )
+          )
+        ),
+      };
+
+      return h('div', { className: 'w-full flex flex-col gap-4' },
+        // Persistent node strip — never remounts, only CSS-transitions
+        h('div', { className: 'flex items-center flex-shrink-0' },
+          nodes.map((n, i) => {
+            const active = hl === 'all' || hl === i;
+            const dim = hl !== null && hl !== 'all' && hl !== i;
+            return h(Fragment, { key: i },
+              h('div', { className: `flex-1 flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl border-2 transition-all duration-500 ${active ? 'bg-primary/5 border-primary' : dim ? 'border-transparent opacity-20' : 'border-ui-border bg-ui-bg'}` },
+                h('div', { className: `text-2xl transition-all duration-500 ${dim ? 'grayscale' : ''}` }, n.e),
+                h('p', { className: `text-[11px] font-bold text-center leading-tight transition-colors duration-500 ${active ? 'text-primary' : 'text-text-muted'}` }, n.lbl)
+              ),
+              i < nodes.length - 1 && h('div', { className: `flex-shrink-0 h-px transition-all duration-500 ${hl === 'all' ? 'w-5 bg-primary/40' : 'w-3 bg-ui-border'}` })
+            );
+          })
+        ),
+        // Fixed-height detail panel — only this fades
+        h('div', { key: String(hl), className: 'animate-fade-in overflow-hidden', style: { height: '252px' } },
+          detail[hl]
+        )
+      );
+    }
+
+    // Round 1: API Supplier Failure
+    function Diag1() {
+      const nodes = [{e:'⚠️', l:'Supplier IN', sub:'MFG HOLD', err:true}, {e:'⚗️', l:'Mfg UK', sub:'Awaiting'}, {e:'🔬', l:'QC', sub:'Standby'}, {e:'🏥', l:'NHS Trusts', sub:'11 days'}];
+      return h('div', { className: 'space-y-5' },
+        h('div', { className: 'bg-accent-red/5 border-2 border-accent-red/20 rounded-2xl p-5 text-center' },
+          h('p', { className: 'text-[10px] font-black text-accent-red uppercase tracking-widest mb-1' }, 'Warehouse Stock Remaining'),
+          h('p', { className: 'text-7xl font-black text-accent-red leading-none' }, '17'),
+          h('p', { className: 'text-sm font-bold text-text-muted mt-1' }, 'days at current run rate')
+        ),
+        h('div', { className: 'bg-accent-yellow/5 border border-accent-yellow/20 rounded-xl px-4 py-3 flex items-center gap-3' },
+          h('span', { className: 'text-xl' }, '⚡'),
+          h('p', { className: 'text-xs font-bold text-text-main' }, 'Gujarat supplier: 68% of ciprofloxacin precursor — now on regulatory hold')
+        ),
+        h('div', { className: 'flex items-center gap-1' },
+          nodes.map((n, i) => h(Fragment, { key: i },
+            h('div', { className: `flex-1 rounded-xl p-2.5 text-center border-2 ${n.err ? 'border-accent-red bg-accent-red/10' : 'border-ui-border bg-ui-bg'}` },
+              h('div', { className: 'text-2xl mb-1' }, n.e),
+              h('p', { className: `text-[10px] font-black leading-tight ${n.err ? 'text-accent-red' : 'text-text-muted'}` }, n.err ? n.sub : n.l)
+            ),
+            i < nodes.length - 1 && h('div', { className: `text-[10px] flex-shrink-0 ${n.err ? 'text-accent-red' : 'text-ui-border'}` }, '▶')
+          ))
+        )
+      );
+    }
+
+    // Round 2: Bullwhip Effect
+    function Diag2() {
+      const bars = [{l:'Patient\nDemand', pct:10, color:'#198038'}, {l:'Pharmacy\nOrders', pct:28, color:'#8d6e00'}, {l:'Wholesale\nOrders', pct:65, color:'#da1e28'}, {l:'Factory\nSignal', pct:100, color:'#da1e28'}];
+      const labels = ['10%', '280%', '140%', '+280%'];
+      const actuals = ['+10%', '+140%', '+280%', '+280%'];
+      return h('div', { className: 'space-y-4' },
+        h('div', { className: 'bg-accent-red/5 border-2 border-accent-red/20 rounded-2xl p-5 text-center' },
+          h('p', { className: 'text-[10px] font-black text-accent-red uppercase tracking-widest mb-1' }, 'Demand Amplification'),
+          h('p', { className: 'text-7xl font-black text-accent-red leading-none' }, '×28'),
+          h('p', { className: 'text-sm font-bold text-text-muted mt-1' }, 'signal distortion factory vs patient')
+        ),
+        h('div', { className: 'flex items-end gap-2 px-1', style: { height: '120px' } },
+          [{l:'Patient', v:10, hex:'#198038'}, {l:'Pharmacy', v:40, hex:'#8d6e00'}, {l:'Wholesale', v:140, hex:'#da1e28'}, {l:'Factory', v:280, hex:'#da1e28'}].map((d, i) =>
+            h('div', { key: i, className: 'flex-1 h-full flex flex-col items-center justify-end' },
+              h('p', { className: 'text-[10px] font-black mb-1', style: { color: d.hex } }, `+${d.v}%`),
+              h('div', { className: 'w-full rounded-t-lg', style: { height: `${(d.v/280)*72}px`, backgroundColor: d.hex, opacity: 0.85 } }),
+              h('p', { className: 'text-[9px] text-text-muted font-bold text-center leading-tight mt-1.5' }, d.l)
+            )
+          )
+        )
+      );
+    }
+
+    // Round 3: Regulatory Deviation
+    function Diag3() {
+      const batches = Array.from({ length: 14 }, (_, i) => ({ id: `B7${10+i}`, flagged: [0,3,5,8,9,12].includes(i) }));
+      return h('div', { className: 'space-y-4' },
+        h('div', { className: 'bg-accent-red/5 border-2 border-accent-red/20 rounded-2xl p-5 text-center' },
+          h('p', { className: 'text-[10px] font-black text-accent-red uppercase tracking-widest mb-1' }, 'Batches in Distribution'),
+          h('p', { className: 'text-7xl font-black text-accent-red leading-none' }, '14'),
+          h('p', { className: 'text-sm font-bold text-text-muted mt-1' }, 'across 4 countries · deviation unresolved')
+        ),
+        h('div', { className: 'grid grid-cols-7 gap-1' },
+          batches.map(b => h('div', { key: b.id, className: `rounded-lg p-1.5 text-center border ${b.flagged ? 'bg-accent-red border-accent-red/40' : 'bg-accent-green/10 border-accent-green/30'}` },
+            h('p', { className: `text-base font-black ${b.flagged ? 'text-white' : 'text-accent-green'}` }, b.flagged ? '!' : '✓'),
+            h('p', { className: `text-[8px] font-bold ${b.flagged ? 'text-red-100' : 'text-text-muted'}` }, b.id)
+          ))
+        ),
+        h('div', { className: 'flex gap-3 text-[10px]' },
+          h('span', { className: 'flex items-center gap-1' }, h('span', { className: 'w-3 h-3 rounded bg-accent-red inline-block' }), h('span', { className: 'font-bold text-text-muted' }, '6 Flagged')),
+          h('span', { className: 'flex items-center gap-1' }, h('span', { className: 'w-3 h-3 rounded bg-accent-green/30 inline-block' }), h('span', { className: 'font-bold text-text-muted' }, '8 Clear'))
+        )
+      );
+    }
+
+    // Round 4: Cold Chain Failure
+    function Diag4() {
+      return h('div', { className: 'space-y-4' },
+        h('div', { className: 'bg-accent-red/5 border-2 border-accent-red/20 rounded-2xl p-5 text-center' },
+          h('p', { className: 'text-[10px] font-black text-accent-red uppercase tracking-widest mb-1' }, 'Assets at Risk'),
+          h('p', { className: 'text-7xl font-black text-accent-red leading-none' }, '£1.8M'),
+          h('p', { className: 'text-sm font-bold text-text-muted mt-1' }, 'biologics exposed 8°C+ for 11 hours')
+        ),
+        h('div', { className: 'relative bg-ui-bg rounded-xl overflow-hidden h-24' },
+          h('div', { className: 'absolute inset-x-0 bottom-0 h-12 bg-accent-green/10' }),
+          h('div', { className: 'absolute inset-x-0 bottom-12 border-t-2 border-dashed border-accent-yellow/60 flex items-center px-3' },
+            h('span', { className: 'text-[9px] font-black text-accent-yellow bg-white px-1' }, '2°C – 8°C LIMIT')
+          ),
+          h('svg', { viewBox: '0 0 200 96', className: 'w-full h-full absolute inset-0', preserveAspectRatio: 'none' },
+            h('polyline', { points: '0,80 40,78 70,76 90,20 130,30 160,78 200,80', fill: 'none', stroke: '#007d79', strokeWidth: 2.5 }),
+            h('circle', { cx: 90, cy: 20, r: 5, fill: '#da1e28' }),
+            h('circle', { cx: 130, cy: 30, r: 4, fill: '#da1e28' })
+          ),
+          h('div', { className: 'absolute top-2 left-1/2 -translate-x-1/2 bg-accent-red text-white text-[9px] font-black px-2 py-0.5 rounded-full' }, '⚠ EXCURSION')
+        ),
+        h('div', { className: 'grid grid-cols-2 gap-2' },
+          h('div', { className: 'bg-ui-bg rounded-xl p-3 text-center' },
+            h('p', { className: 'text-2xl font-black text-text-main' }, '11h'),
+            h('p', { className: 'text-[10px] text-text-muted font-bold' }, 'Exposure duration')
+          ),
+          h('div', { className: 'bg-ui-bg rounded-xl p-3 text-center' },
+            h('p', { className: 'text-2xl font-black text-accent-red' }, '+6°C'),
+            h('p', { className: 'text-[10px] text-text-muted font-bold' }, 'Above safe limit')
+          )
+        )
+      );
+    }
+
+    // Round 5: Allocation Crisis
+    function Diag5() {
+      const segs = [
+        { l: 'NHS Oncology', pct: 35, color: '#007d79', note: 'Critical' },
+        { l: 'Private Hubs', pct: 25, color: '#00539a', note: 'Commercial' },
+        { l: 'Community Rx', pct: 25, color: '#198038', note: 'Ongoing' },
+        { l: 'Export Contract', pct: 15, color: '#8d6e00', note: '£2.4M' },
+      ];
+      return h('div', { className: 'space-y-4' },
+        h('div', { className: 'bg-accent-red/5 border-2 border-accent-red/20 rounded-2xl p-5 text-center' },
+          h('p', { className: 'text-[10px] font-black text-accent-red uppercase tracking-widest mb-1' }, 'Available Supply'),
+          h('p', { className: 'text-7xl font-black text-accent-red leading-none' }, '35%'),
+          h('p', { className: 'text-sm font-bold text-text-muted mt-1' }, 'of normal inventory · 4 segments competing')
+        ),
+        h('div', { className: 'space-y-2' },
+          segs.map(s => h('div', { key: s.l, className: 'flex items-center gap-3' },
+            h('p', { className: 'text-[10px] font-bold text-text-muted w-24 flex-shrink-0' }, s.l),
+            h('div', { className: 'flex-1 bg-ui-s2 rounded-full h-4 overflow-hidden' },
+              h('div', { className: 'h-full rounded-full', style: { width: `${s.pct * 2.5}%`, backgroundColor: s.color } })
+            ),
+            h('span', { className: 'text-[10px] font-black w-8 text-right', style: { color: s.color } }, `${s.pct}%`)
+          ))
+        ),
+        h('p', { className: 'text-[10px] text-text-muted font-bold text-center' }, '↑ Illustrative pre-decision allocation split')
+      );
+    }
+
+    const DIAGRAMS = [Diag1, Diag2, Diag3, Diag4, Diag5];
+
+    // ═══════════════════════════════════════════════════
+    //  UI COMPONENTS
+    // ═══════════════════════════════════════════════════
+
+    function Metric({ label, value, delta, mini = false }) {
+      const v = clamp(value);
+      const colorClass = v > 65 ? 'bg-accent-green' : v > 35 ? 'bg-accent-yellow' : 'bg-accent-red';
+      const textClass = v > 65 ? 'text-accent-green' : v > 35 ? 'text-accent-yellow' : 'text-accent-red';
+      
+      if (mini) return h('div', { className: 'flex flex-col gap-1 min-w-[70px]' },
+        h('span', { className: 'text-[9px] font-bold text-text-muted uppercase tracking-widest' }, label.slice(0,3)),
+        h('span', { className: `text-sm font-black ${textClass}` }, `${v}%`)
+      );
+
+      return h('div', { className: 'flex-1 group px-6 py-4 border-r border-ui-border last:border-r-0' },
+        h('div', { className: 'flex justify-between items-end mb-2' },
+          h('span', { className: 'text-[10px] text-text-muted uppercase tracking-widest font-bold' }, label),
+          h('div', { className: 'flex items-center gap-1.5' },
+             delta !== 0 && h('span', { className: `text-[10px] font-bold ${delta > 0 ? 'text-accent-green' : 'text-accent-red'}` }, delta > 0 ? `+${delta}` : delta),
+             h('span', { className: `text-sm font-black ${textClass}` }, `${v}%`)
+          )
+        ),
+        h('div', { className: 'h-1.5 w-full bg-ui-s2 rounded-full overflow-hidden' },
+          h('div', { className: `h-full ${colorClass} transition-all duration-1000 ease-out`, style: { width: `${v}%` } })
+        )
+      );
+    }
+
+    function OsShell({ phase, round, metrics, prevM, children }) {
+      const now = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+      
+      return h('div', { className: 'h-screen bg-ui-bg flex flex-col font-sans overflow-hidden' },
+        // Global Header (Top Dashboard)
+        h('header', { className: 'bg-white border-b border-ui-border z-50 flex flex-col' },
+          h('div', { className: 'h-16 lg:h-20 px-8 flex items-center justify-between border-b border-ui-bg' },
+            h('div', { className: 'flex items-center gap-6' },
+              h('div', { className: 'w-12 h-12 bg-primary rounded-2xl flex items-center justify-center font-black text-white text-2xl shadow-xl shadow-primary/20' }, 'M'),
+              h('div', { className: 'hidden sm:block' },
+                h('p', { className: 'text-sm font-black tracking-widest text-primary uppercase' }, 'Meridian Pharma'),
+                h('p', { className: 'text-[10px] text-text-muted uppercase font-bold tracking-tight' }, 'Strategic Supply Intelligence')
+              )
+            ),
+            h('nav', { className: 'hidden lg:flex items-center gap-10 font-bold text-xs uppercase tracking-widest text-text-muted' },
+              h('span', { className: phase === 'playing' ? 'text-primary' : '' }, 'Current Operations'),
+              h('span', null, 'Regulatory Log'),
+              h('span', null, 'Analytics')
+            ),
+            h('div', { className: 'flex items-center gap-6' },
+              h('div', { className: 'text-right hidden xs:block' },
+                h('p', { className: 'text-sm font-black text-text-main' }, 'Director Harrison'),
+                h('p', { className: 'text-[10px] text-text-muted mt-0.5 font-bold' }, now.toUpperCase())
+              ),
+              h('button', { className: 'w-11 h-11 rounded-2xl bg-ui-bg border-2 border-ui-border flex items-center justify-center text-xs font-black text-text-secondary' }, 'JH')
+            )
+          ),
+          // Integrated Metric Bar (The "Top Bar Dashboard")
+          (phase === 'playing' || phase === 'profile') && h('div', { className: 'bg-white px-8 flex items-center' },
+            h('div', { className: 'flex-shrink-0 flex items-baseline gap-2 border-r border-ui-border pr-8 mr-8 py-4' },
+               h('span', { className: 'text-3xl font-black text-primary' }, round + 1),
+               h('span', { className: 'text-text-muted font-bold text-sm tracking-tighter' }, 'WEEK / 5')
+            ),
+            h('div', { className: 'flex-1 flex overflow-x-auto' },
+              Object.entries(metrics).map(([k, v]) => h(Metric, { key: k, label: MLABELS[k], value: v, delta: prevM ? v - prevM[k] : 0 }))
+            )
+          )
+        ),
+        // Main Viewport
+        h('main', { className: 'flex-1 overflow-y-auto' }, children)
+      );
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  SCREENS
+    // ═══════════════════════════════════════════════════
+
+    function Splash({ onStart }) {
+      return h('div', { className: 'flex-1 flex flex-col items-center justify-center px-6 py-12 text-center' },
+        h('div', { className: 'max-w-4xl w-full space-y-6' },
+          h('p', { className: 'text-[10px] text-primary mb-4 tracking-[0.4em] uppercase font-black' }, 'Graduate Seminar · Pharmaceutical SCM'),
+          h('h1', { className: 'font-light tracking-tighter mb-4' },
+            'THE ', h('span', { className: 'font-bold text-primary' }, 'CHAIN')
+          ),
+          h('div', { className: 'h-1.5 w-20 bg-primary mx-auto rounded-full' }),
+          h('p', { className: 'text-xl lg:text-2xl text-text-secondary leading-relaxed font-medium max-w-2xl mx-auto' },
+            'A masterclass in pharmaceutical supply chain resilience, strategic risk, and global ethics.'
+          ),
+          h('button', {
+            onClick: onStart,
+            className: 'mt-6 px-10 py-4 bg-primary text-white font-black rounded-2xl hover:bg-primary-dark transition-all transform hover:scale-105 shadow-xl shadow-primary/30 text-lg'
+          }, 'INITIATE ANALYSIS →')
+        )
+      );
+    }
+
+    function NarrativePhase({ onComplete }) {
+      const [step, setStep] = useState(0);
+      const s = NARRATIVE[step];
+      
+      return h('div', { className: 'h-full flex flex-col animate-fade-in' },
+        // Fixed header: progress
+        h('div', { className: 'flex-shrink-0 flex items-center justify-between px-6 lg:px-10 pt-6 pb-4 border-b border-ui-border' },
+          h('h3', { className: 'text-[10px] font-black text-text-muted uppercase tracking-[0.3em]' }, `Phase 0${step+1} · System Context`),
+          h('div', { className: 'flex gap-2' },
+            NARRATIVE.map((_, i) => h('div', {
+              key: i,
+              className: `h-1.5 w-10 rounded-full transition-all duration-300 ${i <= step ? 'bg-primary' : 'bg-ui-s2'}`
+            }))
+          )
+        ),
+        // Scrollable content
+        h('div', { className: 'flex-1 overflow-y-auto px-6 lg:px-10 py-6' },
+          h('div', { key: step, className: 'grid lg:grid-cols-2 gap-10 items-start animate-fade-in' },
+            h('div', { className: 'space-y-6' },
+              h('h2', { className: 'text-3xl lg:text-5xl font-bold leading-tight tracking-tight' }, s.h),
+              h('p', { className: 'text-lg text-text-secondary leading-relaxed font-medium' }, s.p),
+              s.concept && h('div', { className: 'p-6 bg-primary/5 rounded-2xl border-l-4 border-primary' },
+                h('p', { className: 'text-[10px] font-black text-primary uppercase tracking-widest mb-2' }, 'Masterclass Doctrine'),
+                h('p', { className: 'text-sm font-bold text-text-main italic' }, s.concept)
+              )
+            ),
+            h('div', { className: 'bg-white p-5 rounded-[32px] border-2 border-ui-border shadow-xl overflow-hidden' },
+              h(ChainSVG, { hl: s.hl })
+            )
+          )
+        ),
+        // Fixed footer: nav buttons always in the same place
+        h('div', { className: 'flex-shrink-0 flex justify-between items-center px-6 lg:px-10 py-5 border-t border-ui-border bg-ui-bg' },
+          h('button', {
+            onClick: () => setStep(s => s - 1),
+            disabled: step === 0,
+            className: `px-8 py-3.5 border-2 border-ui-border text-text-secondary text-sm font-black rounded-xl hover:bg-white transition-all ${step === 0 ? 'opacity-0 pointer-events-none' : ''}`
+          }, '← BACK'),
+          step < NARRATIVE.length - 1
+            ? h('button', { onClick: () => setStep(s => s + 1), className: 'px-10 py-3.5 bg-primary text-white text-sm font-black rounded-xl hover:bg-primary-dark transition-all transform active:scale-95 shadow-xl shadow-primary/20' }, 'CONTINUE ANALYSIS →')
+            : h('button', { onClick: onComplete, className: 'px-10 py-3.5 bg-accent-blue text-white text-sm font-black rounded-xl hover:bg-accent-blue/80 transition-all transform active:scale-95 shadow-xl shadow-accent-blue/20' }, 'LAUNCH SIMULATION →')
+        )
+      );
+    }
+
+    function Playing({ round, setRound, metrics, setMetrics, setPrevM, onComplete }) {
+      const [phase, setPhase] = useState('scene');
+      const [picked, setPicked] = useState(null);
+      const [history, setHistory] = useState([]);
+      const rdata = ROUNDS[round];
+      const Diag = DIAGRAMS[round];
+
+      const handlePick = (ch) => {
+        setPicked(ch);
+        setPrevM({ ...metrics });
+        const newM = {
+          inventory: clamp(metrics.inventory + (ch.deltas.inventory || 0)),
+          resilience: clamp(metrics.resilience + (ch.deltas.resilience || 0)),
+          demand: clamp(metrics.demand + (ch.deltas.demand || 0)),
+          reputation: clamp(metrics.reputation + (ch.deltas.reputation || 0))
+        };
+        setMetrics(newM);
+        setHistory([...history, { tag: ch.tag, label: ch.label, concept: ch.concept }]);
+        setPhase('result');
+      };
+
+      const handleNext = () => {
+        if (round >= 4) onComplete(history, metrics);
+        else {
+          setRound(round + 1);
+          setPhase('scene');
+          setPicked(null);
+        }
+      };
+
+      return h('div', { className: 'max-w-7xl mx-auto w-full p-6 lg:p-8' },
+        phase === 'scene' && h('div', { key: round, className: 'animate-fade-up space-y-8' },
+          h('div', { className: 'grid lg:grid-cols-3 gap-8 items-start' },
+            h('div', { className: 'lg:col-span-2 space-y-6' },
+              h('div', { className: 'flex items-center gap-3' },
+                h('span', { className: 'px-3 py-1 bg-accent-red text-white text-[9px] font-black rounded-lg' }, 'CRITICAL INCIDENT'),
+                h('span', { className: 'text-[10px] font-bold text-text-muted tracking-widest' }, `WEEK 0${round+1}`)
+              ),
+              h('h2', { className: 'text-3xl lg:text-5xl font-bold tracking-tight' }, rdata.tag),
+              h('p', { className: 'text-lg text-text-secondary leading-relaxed font-semibold' }, rdata.situation),
+              h('div', { className: 'p-6 bg-accent-yellow/5 border-2 border-accent-yellow/20 rounded-[32px]' },
+                 h('p', { className: 'text-[10px] font-black text-accent-yellow uppercase mb-2' }, 'Strategic Stakes'),
+                 h('p', { className: 'text-base font-bold italic text-text-main leading-snug' }, rdata.stakes)
+              )
+            ),
+            h('div', { className: 'bg-white p-6 rounded-[44px] border-2 border-ui-border shadow-2xl h-fit sticky top-10' }, h(Diag))
+          ),
+          h('div', { className: 'space-y-4 pt-6' },
+            h('h4', { className: 'text-[10px] font-black text-text-muted uppercase tracking-[0.3em] border-b pb-4' }, 'Select Decision Framework'),
+            h('div', { className: 'grid sm:grid-cols-2 lg:grid-cols-3 gap-5' },
+              rdata.choices.map(ch => h('button', { key: ch.id, onClick: () => handlePick(ch), className: 'group p-6 bg-white border-2 border-ui-border rounded-[32px] text-left hover:border-primary hover:shadow-2xl transition-all transform hover:-translate-y-1' },
+                h('div', { className: 'w-10 h-10 rounded-xl bg-ui-bg flex items-center justify-center font-black text-primary mb-5 group-hover:bg-primary group-hover:text-white transition-colors text-sm' }, ch.id),
+                h('h4', { className: 'text-lg font-bold mb-3 leading-tight' }, ch.label),
+                h('p', { className: 'text-sm text-text-muted mb-5 font-medium leading-relaxed' }, ch.description),
+                h('div', { className: 'pt-4 border-t border-ui-bg text-[10px] font-black text-accent-red uppercase tracking-widest' }, 'Trade-off: ', h('span', { className: 'text-text-muted font-bold ml-2 normal-case' }, ch.tradeoff))
+              ))
+            )
+          )
+        ),
+        phase === 'result' && h('div', { key: 'res', className: 'h-full flex flex-col animate-fade-in' },
+          h('div', { className: 'flex-1 overflow-y-auto px-6 lg:px-10 py-8 space-y-6 max-w-4xl mx-auto w-full' },
+            // Decision header
+            h('div', { className: 'flex items-center gap-3' },
+              h('div', { className: 'inline-block px-4 py-1.5 bg-accent-green/10 text-accent-green text-[10px] font-black rounded-lg uppercase tracking-widest' }, '✓ Decision Logged'),
+              h('span', { className: `px-3 py-1 text-[9px] font-black rounded-lg uppercase ${picked.tag === 'PATIENT_FIRST' ? 'bg-primary/10 text-primary' : picked.tag === 'RESILIENCE' ? 'bg-accent-blue/10 text-accent-blue' : picked.tag === 'EFFICIENCY' ? 'bg-accent-green/10 text-accent-green' : 'bg-accent-yellow/10 text-accent-yellow'}` }, picked.tag.replace('_', ' '))
+            ),
+            h('div', null,
+              h('h4', { className: 'text-[10px] font-black text-text-muted uppercase tracking-widest mb-2' }, 'You chose'),
+              h('h2', { className: 'text-2xl lg:text-3xl font-bold tracking-tight leading-tight' }, picked.label)
+            ),
+            // Consequence
+            h('div', { className: 'bg-ui-bg border border-ui-border rounded-2xl p-6' },
+              h('p', { className: 'text-[10px] font-black text-text-muted uppercase tracking-widest mb-3' }, 'What happened'),
+              h('p', { className: 'text-base font-semibold text-text-main leading-relaxed' }, picked.consequence),
+              h('div', { className: 'mt-4 pt-4 border-t border-ui-border' },
+                h('p', { className: 'text-[10px] font-black text-accent-red uppercase tracking-widest mb-1' }, 'Trade-off absorbed'),
+                h('p', { className: 'text-sm text-text-secondary font-medium' }, picked.tradeoff)
+              )
+            ),
+            // Concept insight
+            h('div', { className: 'bg-primary/5 border-2 border-primary/20 rounded-2xl p-6' },
+              h('p', { className: 'text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-3' }, 'SCM Concept · ' + picked.concept.term),
+              h('p', { className: 'text-base text-text-secondary leading-relaxed font-semibold' }, picked.concept.note)
+            ),
+            // Pedagogical reflection prompt
+            h('div', { className: 'bg-accent-yellow/5 border-2 border-accent-yellow/20 rounded-2xl p-6' },
+              h('p', { className: 'text-[10px] font-black text-accent-yellow uppercase tracking-widest mb-3' }, '✏ Reflection — note it before you continue'),
+              h('p', { className: 'text-sm font-bold text-text-main mb-3' }, 'What was the primary reason you chose this option? Was it ethical, financial, operational, or instinctive?'),
+              h('textarea', {
+                className: 'w-full bg-white border-2 border-ui-border rounded-xl p-4 text-sm text-text-main font-medium resize-none focus:border-primary focus:outline-none transition-colors',
+                rows: 3,
+                placeholder: 'Type your reasoning here (your answer stays private and isn\'t recorded)…'
+              })
+            )
+          ),
+          // Fixed continue button
+          h('div', { className: 'flex-shrink-0 px-6 lg:px-10 py-5 border-t border-ui-border bg-ui-bg max-w-4xl mx-auto w-full' },
+            h('button', { onClick: handleNext, className: 'w-full py-5 bg-primary text-white font-black rounded-2xl hover:bg-primary-dark transition-all transform active:scale-95 shadow-xl shadow-primary/30 text-base' },
+              round >= 4 ? 'GENERATE PERFORMANCE PROFILE →' : 'CONTINUE TO NEXT INCIDENT →'
+            )
+          )
+        )
+      );
+    }
+
+    function Profile({ history, metrics, onRestart }) {
+      const counts = history.reduce((acc, curr) => {
+        acc[curr.tag] = (acc[curr.tag] || 0) + 1;
+        return acc;
+      }, { PATIENT_FIRST:0, RESILIENCE:0, COST_DRIVEN:0, EFFICIENCY:0 });
+      const dominant = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+      const profile = ARCHETYPES[dominant];
+
+      return h('div', { className: 'max-w-5xl mx-auto w-full p-6 lg:p-10 animate-fade-in space-y-8' },
+        h('div', { className: 'text-center space-y-4' },
+          h('p', { className: 'text-[10px] text-primary uppercase tracking-[0.4em] font-black' }, 'Performance Profile Generated'),
+          h('h2', { className: 'text-4xl lg:text-5xl font-bold tracking-tight' }, profile.archetype),
+          h('p', { className: 'text-lg text-text-secondary font-medium max-w-2xl mx-auto leading-relaxed' }, profile.summary)
+        ),
+        h('div', { className: 'grid lg:grid-cols-2 gap-8' },
+          h('div', { className: 'bg-white border-2 border-ui-border rounded-[40px] p-8 space-y-6 flex flex-col items-center' },
+            h('h4', { className: 'text-[10px] font-black text-text-muted uppercase tracking-widest self-start' }, 'Decision Archetype'),
+            h(RadarChart, { counts }),
+            h('div', { className: 'flex flex-wrap gap-2 justify-center' },
+              Object.entries(counts).map(([k, v]) => h('span', { key: k, className: 'px-3 py-1 bg-ui-bg rounded-lg text-[10px] font-black text-text-muted uppercase' }, `${k.replace('_',' ')}: ${v}/5`))
+            )
+          ),
+          h('div', { className: 'space-y-5' },
+            h('div', { className: 'bg-accent-green/5 border-2 border-accent-green/20 rounded-[32px] p-6' },
+              h('p', { className: 'text-[10px] font-black text-accent-green uppercase tracking-widest mb-4' }, 'Core Strengths'),
+              h('ul', { className: 'space-y-2' },
+                profile.strengths.map((s, i) => h('li', { key: i, className: 'flex items-center gap-3 text-sm font-bold text-text-main' },
+                  h('span', { className: 'w-6 h-6 rounded-lg bg-accent-green/20 flex items-center justify-center text-accent-green text-xs font-black flex-shrink-0' }, '✓'),
+                  s
+                ))
+              )
+            ),
+            h('div', { className: 'bg-accent-red/5 border-2 border-accent-red/20 rounded-[32px] p-6' },
+              h('p', { className: 'text-[10px] font-black text-accent-red uppercase tracking-widest mb-4' }, 'Development Areas'),
+              h('ul', { className: 'space-y-2' },
+                profile.blindspots.map((s, i) => h('li', { key: i, className: 'flex items-center gap-3 text-sm font-bold text-text-main' },
+                  h('span', { className: 'w-6 h-6 rounded-lg bg-accent-red/20 flex items-center justify-center text-accent-red text-xs font-black flex-shrink-0' }, '!'),
+                  s
+                ))
+              )
+            ),
+            h('div', { className: 'bg-primary/5 border-2 border-primary/20 rounded-[32px] p-6' },
+              h('p', { className: 'text-[10px] font-black text-primary uppercase tracking-widest mb-3' }, 'Reflection Question'),
+              h('p', { className: 'text-base font-bold text-text-main italic leading-relaxed' }, profile.reflection)
+            )
+          )
+        ),
+        h('div', { className: 'bg-white border-2 border-ui-border rounded-[32px] flex overflow-hidden' },
+          Object.entries(metrics).map(([k, v]) => h(Metric, { key: k, label: MLABELS[k], value: v, delta: 0 }))
+        ),
+        h('button', { onClick: onRestart, className: 'w-full py-5 border-2 border-primary text-primary font-black rounded-2xl hover:bg-primary hover:text-white transition-all text-sm uppercase tracking-widest' }, 'Run New Simulation')
+      );
+    }
+
+    function App() {
+      const [phase, setPhase] = useState('splash');
+      const [round, setRound] = useState(0);
+      const [metrics, setMetrics] = useState({ ...INITIAL });
+      const [prevM, setPrevM] = useState(null);
+      const [data, setData] = useState({ history: [], metrics: {} });
+
+      const onDecisionComplete = (history, finalMetrics) => {
+        setData({ history, metrics: finalMetrics });
+        setPhase('profile');
+      };
+
+      const handleRestart = () => {
+        setPhase('splash');
+        setRound(0);
+        setMetrics({ ...INITIAL });
+        setPrevM(null);
+      };
+
+      const handleNarrativeComplete = () => {
+        setRound(0);
+        setMetrics({ ...INITIAL });
+        setPrevM(null);
+        setPhase('playing');
+      };
+
+      let content;
+      if (phase === 'splash') content = h(Splash, { onStart: () => setPhase('narrative') });
+      else if (phase === 'narrative') content = h(NarrativePhase, { onComplete: handleNarrativeComplete });
+      else if (phase === 'playing') content = h(Playing, { round, setRound, metrics, setMetrics, setPrevM, onComplete: onDecisionComplete });
+      else content = h(Profile, { ...data, onRestart: handleRestart });
+
+      return h(OsShell, { phase, round, metrics, prevM }, content);
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+  </script>
+</body>
+</html>
